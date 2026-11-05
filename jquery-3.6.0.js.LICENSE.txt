@@ -1,0 +1,1 @@
+/*! For license information please see jquery-3.6.0.js.LICENSE.txt */
