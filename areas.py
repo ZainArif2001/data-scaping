@@ -107,6 +107,47 @@ def _geocode(city: str, country: str) -> Optional[dict]:
         return None
 
 
+def _synth_bbox(lat: float, lon: float, km: float = 18.0) -> List[str]:
+    """Approximate square bbox [south, north, west, east] around a point."""
+    dlat = km / 111.0
+    dlon = km / max(1.0, 111.0 * math.cos(math.radians(lat)))
+    return [str(lat - dlat), str(lat + dlat), str(lon - dlon), str(lon + dlon)]
+
+
+def _geocode_photon(city: str, country: str) -> Optional[dict]:
+    """Photon fallback — Nominatim is often blocked on hosted/cloud IPs."""
+    try:
+        resp = requests.get(
+            PHOTON_URL,
+            params={"q": f"{city}, {country}", "limit": 5},
+            headers=HEADERS, timeout=15,
+        )
+        resp.raise_for_status()
+        feats = resp.json().get("features", [])
+        if not feats:
+            return None
+        # prefer a feature that carries a real extent (city-level object)
+        feats.sort(key=lambda f: 0 if f.get("properties", {}).get("extent") else 1)
+        f = feats[0]
+        lon, lat = f["geometry"]["coordinates"][:2]
+        ext = f.get("properties", {}).get("extent")  # [minLon, maxLat, maxLon, minLat]
+        bb = ([str(ext[3]), str(ext[1]), str(ext[0]), str(ext[2])] if ext
+              else _synth_bbox(lat, lon))
+        return {"lat": str(lat), "lon": str(lon), "boundingbox": bb}
+    except Exception:
+        return None
+
+
+def _geocode_local(city: str, country: str) -> Optional[dict]:
+    """Last resort: find the city in the country's GeoNames dump (offline)."""
+    cl = city.strip().lower()
+    for p in _country_places(country):
+        if p["n"].lower() == cl:
+            return {"lat": str(p["lat"]), "lon": str(p["lon"]),
+                    "boundingbox": _synth_bbox(p["lat"], p["lon"])}
+    return None
+
+
 def _bbox_radius_km(geo: dict, lat: float) -> float:
     bb = geo.get("boundingbox")  # [south, north, west, east]
     if not bb:
@@ -175,7 +216,8 @@ def _photon_subareas(city: str, geo: dict) -> List[str]:
 
 def get_areas(city: str, country: str) -> List[str]:
     """Return area names/postcodes for a city, sorted (empty list on failure)."""
-    geo = _geocode(city, country)
+    geo = (_geocode(city, country) or _geocode_photon(city, country)
+           or _geocode_local(city, country))
     if not geo:
         return []
     areas = _local_subareas(geo, country)
