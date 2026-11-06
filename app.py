@@ -117,7 +117,16 @@ if submitted:
                     detail_cb=(lambda d, t: dbar.progress(
                         d / max(t, 1), text=f"Phone/website… {d}/{t}")) if dbar else None,
                 )
-            return scraper.search(keyword.strip(), loc, country, limit, **kwargs)
+            res = scraper.search(keyword.strip(), loc, country, limit, **kwargs)
+            failed = getattr(scraper, "cells_failed", 0)
+            total = getattr(scraper, "cells_total", 0)
+            if total and failed / total > 0.4:
+                st.warning(
+                    f"{src_name} ({loc}): Google blocked {failed}/{total} searches "
+                    "— datacenter IPs get rate-limited. Try OpenStreetMap / Hotfrog "
+                    "/ All Sources for fuller coverage."
+                )
+            return res
 
         result_lists = []
         for loc in locations:

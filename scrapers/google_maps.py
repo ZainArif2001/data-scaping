@@ -39,6 +39,8 @@ class GoogleMapsScraper(BaseScraper):
         else:
             urls = [f"https://www.google.com/maps/search/"
                     f"{quote_plus(f'{keyword} {city} {country}')}"]
+        self.cells_total = len(urls)
+        self.cells_failed = 0
         cards, details = self._scrape(urls, limit, progress_cb,
                                     detail_limit=detail_limit, detail_cb=detail_cb)
 
@@ -94,6 +96,7 @@ class GoogleMapsScraper(BaseScraper):
                         try:
                             page.wait_for_selector("div[role='feed']", timeout=15000)
                         except Exception:
+                            self.cells_failed += 1
                             if progress_cb:
                                 progress_cb(i + 1, total)
                             continue
@@ -113,7 +116,7 @@ class GoogleMapsScraper(BaseScraper):
                             if key and key not in all_cards:
                                 all_cards[key] = c
                     except Exception:
-                        pass
+                        self.cells_failed += 1
                     if progress_cb:
                         progress_cb(i + 1, total)
 
