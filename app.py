@@ -73,6 +73,10 @@ if city_for_areas:
         area_opts = cached_areas(city_for_areas, country)
     except Exception:
         area_opts = []
+    if not area_opts:
+        # don't remember empty/failed lookups — transient API failures
+        # would otherwise hide the dropdown for the cache TTL
+        cached_areas.clear(city_for_areas, country)
     if area_opts:
         areas_sel = st.multiselect(
             "Areas / Districts (optional — empty = whole city)",
